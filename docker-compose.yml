@@ -1,0 +1,131 @@
+version: '3.8'
+
+services:
+  loadbalancer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: loadbalancer
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config.yaml:/app/config.yaml
+    environment:
+      - CONFIG=/app/config.yaml
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/clients"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s  # Увеличенное время ожидания
+    depends_on:
+      postgres:
+        condition: service_healthy
+      backend1:
+        condition: service_started
+      backend2:
+        condition: service_started
+      backend3:
+        condition: service_started
+    networks:
+      - loadbalancer-network
+  
+  postgres:
+    image: postgres:15-alpine
+    container_name: loadbalancer-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: loadbalancer
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - loadbalancer-network
+  
+  backend1:
+    image: nginx:alpine
+    container_name: loadbalancer-backend1
+    volumes:
+      - ./backend/nginx.conf:/etc/nginx/nginx.conf
+      - ./backend/index1.html:/usr/share/nginx/html/index.html
+      - ./backend/health.html:/usr/share/nginx/html/health
+    expose:
+      - "80"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+    networks:
+      - loadbalancer-network
+  
+  backend2:
+    image: nginx:alpine
+    container_name: loadbalancer-backend2
+    volumes:
+      - ./backend/nginx.conf:/etc/nginx/nginx.conf
+      - ./backend/index2.html:/usr/share/nginx/html/index.html
+      - ./backend/health.html:/usr/share/nginx/html/health
+    expose:
+      - "80"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+    networks:
+      - loadbalancer-network
+  
+  backend3:
+    image: nginx:alpine
+    container_name: loadbalancer-backend3
+    volumes:
+      - ./backend/nginx.conf:/etc/nginx/nginx.conf
+      - ./backend/index3.html:/usr/share/nginx/html/index.html
+      - ./backend/health.html:/usr/share/nginx/html/health
+    expose:
+      - "80"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+    networks:
+      - loadbalancer-network
+  
+  tests:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    container_name: loadbalancer-tests
+    environment:
+      - BASE_URL=http://loadbalancer:8080
+      - POSTGRES_DSN=host=postgres port=5432 user=postgres password=secret dbname=loadbalancer sslmode=disable
+    depends_on:
+      loadbalancer:
+        condition: service_healthy
+    networks:
+      - loadbalancer-network
+
+networks:
+  loadbalancer-network:
+    name: loadbalancer-network
+    driver: bridge
+
+volumes:
+  postgres_data:
+    name: loadbalancer_postgres_data

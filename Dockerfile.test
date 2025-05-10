@@ -1,0 +1,15 @@
+FROM golang:1.21-alpine
+
+WORKDIR /app
+
+RUN apk add --no-cache wget
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+COPY wait-for-it.sh /wait-for-it.sh
+RUN chmod +x /wait-for-it.sh
+
+CMD ["/wait-for-it.sh", "loadbalancer:8080", "go", "test", "-v", "./tests"]

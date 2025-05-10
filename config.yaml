@@ -1,0 +1,29 @@
+server:
+  port: "8080"
+
+backends:
+  - "http://backend1:80"
+  - "http://backend2:80"
+  - "http://backend3:80"
+
+healthcheck:
+  endpoint: "/health"
+  interval: 5s
+
+balancer:
+  algorithm: "round-robin"  # или "least-connections"
+
+ratelimit:
+  default:
+    capacity: 100
+    refill_rate: 10  # токенов в секунду
+
+storage:
+  type: "postgres"
+  postgres:
+    host: "postgres"
+    port: 5432
+    user: "postgres"
+    password: "secret"
+    dbname: "loadbalancer"
+    sslmode: "disable"
